@@ -4,21 +4,17 @@ declare(strict_types=1);
 
 namespace spaceonfire\CommandBus\Mapping;
 
-use function array_key_exists;
+use spaceonfire\CommandBus\Exception\FailedToMapCommandException;
 
-/**
- * Stupid simple command-to-handler mapper.
- */
 final class MapByStaticList implements CommandToHandlerMappingInterface
 {
     /**
-     * @var array<string, array<string>>
+     * @var array<class-string,array{class-string,string}>
      */
-    private $mapping;
+    private array $mapping;
 
     /**
-     * MapByStaticList constructor.
-     * @param array<string, array<string>> $mapping
+     * @param array<class-string,array{class-string,string}> $mapping
      * @example
      *     ```php
      *     new MapByStaticList([
@@ -33,27 +29,21 @@ final class MapByStaticList implements CommandToHandlerMappingInterface
         $this->mapping = $mapping;
     }
 
-    /**
-     * @inheritDoc
-     */
-    public function getClassName(string $commandClassName): string
+    public function getClassName(string $commandClass): string
     {
-        if (!array_key_exists($commandClassName, $this->mapping)) {
-            throw FailedToMapCommand::className($commandClassName);
+        if (!\array_key_exists($commandClass, $this->mapping)) {
+            throw FailedToMapCommandException::className($commandClass);
         }
 
-        return $this->mapping[$commandClassName][0];
+        return $this->mapping[$commandClass][0];
     }
 
-    /**
-     * @inheritDoc
-     */
-    public function getMethodName(string $commandClassName): string
+    public function getMethodName(string $commandClass): string
     {
-        if (!array_key_exists($commandClassName, $this->mapping)) {
-            throw FailedToMapCommand::methodName($commandClassName);
+        if (!\array_key_exists($commandClass, $this->mapping)) {
+            throw FailedToMapCommandException::methodName($commandClass);
         }
 
-        return $this->mapping[$commandClassName][1];
+        return $this->mapping[$commandClass][1];
     }
 }

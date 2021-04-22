@@ -4,27 +4,17 @@ declare(strict_types=1);
 
 namespace spaceonfire\CommandBus\Mapping\ClassName;
 
-class SuffixClassNameMapping implements ClassNameMappingInterface
+final class SuffixClassNameMapping implements ClassNameMappingInterface
 {
-    /**
-     * @var string
-     */
-    private $suffix;
+    private string $suffix;
 
-    /**
-     * SuffixClassNameMapping constructor.
-     * @param string $suffix
-     */
     public function __construct(string $suffix)
     {
         $this->suffix = $suffix;
     }
 
-    /**
-     * @inheritDoc
-     */
-    public function getClassName(string $commandClassName): string
+    public function getClassName(string $commandClass): string
     {
-        return $commandClassName . $this->suffix;
+        return $commandClass . $this->suffix;
     }
 }

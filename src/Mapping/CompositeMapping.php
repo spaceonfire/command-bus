@@ -9,21 +9,10 @@ use spaceonfire\CommandBus\Mapping\Method\MethodNameMappingInterface;
 
 final class CompositeMapping implements CommandToHandlerMappingInterface
 {
-    /**
-     * @var ClassNameMappingInterface
-     */
-    private $classNameMapping;
+    private ClassNameMappingInterface $classNameMapping;
 
-    /**
-     * @var MethodNameMappingInterface
-     */
-    private $methodNameMapping;
+    private MethodNameMappingInterface $methodNameMapping;
 
-    /**
-     * CompositeMapping constructor.
-     * @param ClassNameMappingInterface $classNameMapping
-     * @param MethodNameMappingInterface $methodNameMapping
-     */
     public function __construct(
         ClassNameMappingInterface $classNameMapping,
         MethodNameMappingInterface $methodNameMapping
@@ -32,19 +21,13 @@ final class CompositeMapping implements CommandToHandlerMappingInterface
         $this->methodNameMapping = $methodNameMapping;
     }
 
-    /**
-     * @inheritDoc
-     */
-    public function getClassName(string $commandClassName): string
+    public function getClassName(string $commandClass): string
     {
-        return $this->classNameMapping->getClassName($commandClassName);
+        return $this->classNameMapping->getClassName($commandClass);
     }
 
-    /**
-     * @inheritDoc
-     */
-    public function getMethodName(string $commandClassName): string
+    public function getMethodName(string $commandClass): string
     {
-        return $this->methodNameMapping->getMethodName($commandClassName);
+        return $this->methodNameMapping->getMethodName($commandClass);
     }
 }

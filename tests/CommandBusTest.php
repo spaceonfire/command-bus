@@ -4,138 +4,196 @@ declare(strict_types=1);
 
 namespace spaceonfire\CommandBus;
 
-use InvalidArgumentException;
-use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
-use Psr\Container\ContainerInterface;
-use spaceonfire\CommandBus\_Fixtures\Command\AddTaskCommand;
-use spaceonfire\CommandBus\_Fixtures\Command\CompleteTaskCommand;
-use spaceonfire\CommandBus\_Fixtures\Handler\AddTaskCommandHandler;
+use spaceonfire\CommandBus\Exception\CannotInvokeHandlerException;
+use spaceonfire\CommandBus\Fixtures\Command\AddTaskCommand;
+use spaceonfire\CommandBus\Fixtures\Command\CompleteTaskCommand;
+use spaceonfire\CommandBus\Fixtures\Handler\AddTaskCommandHandler;
+use spaceonfire\CommandBus\Fixtures\Handler\HandleMethodHandler;
 use spaceonfire\CommandBus\Mapping\MapByStaticList;
-use stdClass;
 
 class CommandBusTest extends TestCase
 {
-    /**
-     * @var ContainerInterface&MockObject
-     */
-    private $container;
-
-    protected function setUp(): void
+    public function testDefaultWithoutMiddleware(): void
     {
-        $this->container = $this->createMock(ContainerInterface::class);
-
-        $handlerMock = $this->createMock(AddTaskCommandHandler::class);
-        $handlerMock
-            ->expects(self::atMost(1))
-            ->method('handle')
-            ->willReturn('a-return-value');
-
-        $this->container
-            ->method('has')
-            ->with(AddTaskCommandHandler::class)
-            ->willReturn(true);
-
-        $this->container
-            ->method('get')
-            ->with(AddTaskCommandHandler::class)
-            ->willReturn($handlerMock);
-    }
-
-    private function commandBusFactory(array $middlewares = [], bool $mockContainer = false): CommandBus
-    {
-        return new CommandBus(
+        $commandBus = new CommandBus(
             new MapByStaticList([
                 AddTaskCommand::class => [AddTaskCommandHandler::class, 'handle'],
-                CompleteTaskCommand::class => [stdClass::class, 'handle'],
             ]),
-            $middlewares,
-            $mockContainer ? $this->container : null
         );
+
+        self::assertSame('foobar', $commandBus->handle(new AddTaskCommand()));
     }
 
-    public function testCommandBusWithoutMiddleware(): void
+    public function testWithOneMiddleware(): void
     {
-        $commandBus = $this->commandBusFactory();
-        $this->assertEquals('foobar', $commandBus->handle(new AddTaskCommand()));
+        $middleware = new class implements MiddlewareInterface {
+            public int $times = 0;
+
+            public function execute(object $command, callable $next)
+            {
+                ++$this->times;
+                return $next($command);
+            }
+        };
+
+        $commandBus = new CommandBus(
+            new MapByStaticList([
+                AddTaskCommand::class => [AddTaskCommandHandler::class, 'handle'],
+            ]),
+            [$middleware],
+        );
+
+        self::assertSame('foobar', $commandBus->handle(new AddTaskCommand()));
+        self::assertSame(1, $middleware->times);
+    }
+
+    public function testAllMiddlewareAreExecutedInProperOrder(): void
+    {
+        $executionStack = new \ArrayObject();
+
+        $firstMiddleware = new class($executionStack) implements MiddlewareInterface {
+            private \ArrayObject $stack;
+
+            public function __construct(\ArrayObject $stack)
+            {
+                $this->stack = $stack;
+            }
+
+            public function execute(object $command, callable $next)
+            {
+                $this->stack->append($this);
+                return $next($command);
+            }
+        };
+
+        $secondMiddleware = new class($executionStack) implements MiddlewareInterface {
+            private \ArrayObject $stack;
+
+            public function __construct(\ArrayObject $stack)
+            {
+                $this->stack = $stack;
+            }
+
+            public function execute(object $command, callable $next)
+            {
+                $this->stack->append($this);
+                return $next($command);
+            }
+        };
+
+        $thirdMiddleware = new class($executionStack) implements MiddlewareInterface {
+            private \ArrayObject $stack;
+
+            public function __construct(\ArrayObject $stack)
+            {
+                $this->stack = $stack;
+            }
+
+            public function execute(object $command, callable $next)
+            {
+                $this->stack->append($this);
+                return $next($command);
+            }
+        };
+
+        $commandBus = new CommandBus(
+            new MapByStaticList([
+                AddTaskCommand::class => [AddTaskCommandHandler::class, 'handle'],
+            ]),
+            [$firstMiddleware, $secondMiddleware, $thirdMiddleware],
+        );
+
+        self::assertSame('foobar', $commandBus->handle(new AddTaskCommand()));
+        self::assertSame([$firstMiddleware, $secondMiddleware, $thirdMiddleware], $executionStack->getArrayCopy());
+    }
+
+    public function testEarlyReturnInMiddleware(): void
+    {
+        $executionStack = new \ArrayObject();
+
+        $firstMiddleware = new class($executionStack) implements MiddlewareInterface {
+            private \ArrayObject $stack;
+
+            public function __construct(\ArrayObject $stack)
+            {
+                $this->stack = $stack;
+            }
+
+            public function execute(object $command, callable $next): int
+            {
+                $this->stack->append($this);
+
+                return 42;
+            }
+        };
+
+        $secondMiddleware = new class($executionStack) implements MiddlewareInterface {
+            private \ArrayObject $stack;
+
+            public function __construct(\ArrayObject $stack)
+            {
+                $this->stack = $stack;
+            }
+
+            public function execute(object $command, callable $next)
+            {
+                $this->stack->append($this);
+                return $next($command);
+            }
+        };
+
+        $commandBus = new CommandBus(
+            new MapByStaticList([
+                AddTaskCommand::class => [AddTaskCommandHandler::class, 'handle'],
+            ]),
+            [$firstMiddleware, $secondMiddleware],
+        );
+
+        self::assertSame(42, $commandBus->handle(new AddTaskCommand()));
+        self::assertSame([$firstMiddleware], $executionStack->getArrayCopy());
     }
 
     public function testCommandBusMiddlewareValidation(): void
     {
-        $this->expectException(InvalidArgumentException::class);
-        $this->commandBusFactory([new stdClass()]);
-    }
+        $this->expectException(\InvalidArgumentException::class);
 
-    public function testAllMiddlewareAreExecutedAndReturnValuesAreRespected(): void
-    {
-        $executionOrder = [];
-
-        $middleware1 = $this->createMock(MiddlewareInterface::class);
-        $middleware1->method('execute')->willReturnCallback(
-            static function ($command, $next) use (&$executionOrder) {
-                $executionOrder[] = 1;
-
-                return $next($command);
-            }
+        $commandBus = new CommandBus(
+            new MapByStaticList([
+                AddTaskCommand::class => [AddTaskCommandHandler::class, 'handle'],
+            ]),
+            [(object)[]],
         );
-
-        $middleware2 = $this->createMock(MiddlewareInterface::class);
-        $middleware2->method('execute')->willReturnCallback(
-            static function ($command, $next) use (&$executionOrder) {
-                $executionOrder[] = 2;
-
-                return $next($command);
-            }
-        );
-
-        $middleware3 = $this->createMock(MiddlewareInterface::class);
-        $middleware3->method('execute')->willReturnCallback(
-            static function () use (&$executionOrder) {
-                $executionOrder[] = 3;
-
-                return 'foobar';
-            }
-        );
-
-        $commandBus = $this->commandBusFactory([$middleware1, $middleware2, $middleware3]);
-
-        self::assertEquals('foobar', $commandBus->handle(new AddTaskCommand()));
-        self::assertEquals([1, 2, 3], $executionOrder);
-    }
-
-    public function testSingleMiddlewareWorks(): void
-    {
-        $middleware = $this->createMock(MiddlewareInterface::class);
-        $middleware->expects(self::once())->method('execute')->willReturn('foobar');
-
-        $commandBus = $this->commandBusFactory([$middleware]);
-
-        self::assertEquals('foobar', $commandBus->handle(new AddTaskCommand()));
-    }
-
-    public function testCommandBusWithContainer(): void
-    {
-        $commandBus = $this->commandBusFactory([], true);
-        self::assertEquals('a-return-value', $commandBus->handle(new AddTaskCommand()));
     }
 
     public function testCommandBusCannotInvokeHandler(): void
     {
-        $this->expectException(CanNotInvokeHandler::class);
-        $commandBus = $this->commandBusFactory();
+        $commandBus = new CommandBus(
+            new MapByStaticList([
+                CompleteTaskCommand::class => [HandleMethodHandler::class, 'unknownMethod'],
+            ]),
+        );
         $command = new CompleteTaskCommand();
         try {
             $commandBus->handle($command);
-        } catch (CanNotInvokeHandler $exception) {
-            $this->assertEquals($command, $exception->getCommand());
-            throw $exception;
+        } catch (\Throwable $exception) {
+        } finally {
+            \assert(isset($exception));
+            self::assertInstanceOf(CannotInvokeHandlerException::class, $exception);
+            self::assertSame($command, $exception->getCommand());
+            self::assertSame('Cannot invoke handler', $exception->getName());
         }
     }
 
     public function testClone(): void
     {
-        $commandBus = $this->commandBusFactory();
+        $commandBus = new CommandBus(
+            new MapByStaticList([]),
+        );
         $commandBusClone = clone $commandBus;
         self::assertTrue(true);
+
+        // TODO: test that clone command bus will rebind middlewareChain
+        $this->markTestIncomplete();
     }
 }

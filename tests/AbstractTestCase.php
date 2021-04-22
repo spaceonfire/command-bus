@@ -6,13 +6,11 @@ namespace spaceonfire\CommandBus;
 
 use PHPUnit\Framework\TestCase;
 
-if (trait_exists('\Prophecy\PhpUnit\ProphecyTrait')) {
-    abstract class AbstractTestCase extends TestCase
+abstract class AbstractTestCase extends TestCase
+{
+    protected function setUp(): void
     {
-        use \Prophecy\PhpUnit\ProphecyTrait;
-    }
-} else {
-    abstract class AbstractTestCase extends TestCase
-    {
+        parent::setUp();
+        $this->markTestSkipped();
     }
 }

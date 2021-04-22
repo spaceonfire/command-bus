@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace spaceonfire\CommandBus\Mapping;
 
 use PHPUnit\Framework\TestCase;
-use spaceonfire\CommandBus\_Fixtures\Command\AddTaskCommand;
-use spaceonfire\CommandBus\_Fixtures\Command\CompleteTaskCommand;
-use spaceonfire\CommandBus\_Fixtures\Handler\AddTaskCommandHandler;
+use spaceonfire\CommandBus\Exception\FailedToMapCommandException;
+use spaceonfire\CommandBus\Fixtures\Command\AddTaskCommand;
+use spaceonfire\CommandBus\Fixtures\Command\CompleteTaskCommand;
+use spaceonfire\CommandBus\Fixtures\Handler\AddTaskCommandHandler;
 
 class MappingByStaticListTest extends TestCase
 {
@@ -17,11 +18,11 @@ class MappingByStaticListTest extends TestCase
             AddTaskCommand::class => [AddTaskCommandHandler::class, 'handle'],
         ]);
 
-        static::assertEquals(
+        self::assertSame(
             AddTaskCommandHandler::class,
             $mapping->getClassName(AddTaskCommand::class)
         );
-        static::assertEquals('handle', $mapping->getMethodName(AddTaskCommand::class));
+        self::assertSame('handle', $mapping->getMethodName(AddTaskCommand::class));
     }
 
     public function testFailedClassNameMapping(): void
@@ -30,7 +31,7 @@ class MappingByStaticListTest extends TestCase
             AddTaskCommand::class => [AddTaskCommandHandler::class, 'handle'],
         ]);
 
-        $this->expectExceptionObject(FailedToMapCommand::className(CompleteTaskCommand::class));
+        $this->expectExceptionObject(FailedToMapCommandException::className(CompleteTaskCommand::class));
         $mapping->getClassName(CompleteTaskCommand::class);
     }
 
@@ -40,7 +41,7 @@ class MappingByStaticListTest extends TestCase
             AddTaskCommand::class => [AddTaskCommandHandler::class, 'handle'],
         ]);
 
-        $this->expectExceptionObject(FailedToMapCommand::methodName(CompleteTaskCommand::class));
+        $this->expectExceptionObject(FailedToMapCommandException::methodName(CompleteTaskCommand::class));
         $mapping->getMethodName(CompleteTaskCommand::class);
     }
 }

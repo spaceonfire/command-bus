@@ -4,49 +4,40 @@ declare(strict_types=1);
 
 namespace spaceonfire\CommandBus\Mapping\ClassName;
 
-use Webmozart\Assert\Assert;
-
-class ReplacementClassNameMapping implements ClassNameMappingInterface
+final class ReplacementClassNameMapping implements ClassNameMappingInterface
 {
     /**
-     * @var string|string[]
+     * @var string[]
      */
-    private $search;
+    private array $search;
 
     /**
-     * @var string|string[]
+     * @var string[]
      */
-    private $replace;
+    private array $replace;
 
     /**
-     * ReplacementClassNameMapping constructor.
      * @param string|string[] $search
      * @param string|string[]|null $replace
      */
     public function __construct($search, $replace = null)
     {
-        if (null === $replace && is_array($search)) {
-            $replace = array_values($search);
-            $search = array_keys($search);
+        if (null === $replace && \is_array($search)) {
+            $replace = \array_values($search);
+            $search = \array_keys($search);
         }
 
-        $typeAssert = static function ($v, $message = ''): void {
-            $method = is_array($v) ? 'allString' : 'string';
-            Assert::$method($v, $message);
-        };
+        $search = \is_array($search) ? $search : [$search];
+        $replace = \is_array($replace) ? $replace : \array_fill(0, \count($search), $replace);
 
-        $typeAssert($search);
-        $typeAssert($replace);
+        $cast = static fn ($v) => (string)$v;
 
-        $this->search = $search;
-        $this->replace = $replace;
+        $this->search = \array_map($cast, $search);
+        $this->replace = \array_map($cast, $replace);
     }
 
-    /**
-     * @inheritDoc
-     */
-    public function getClassName(string $commandClassName): string
+    public function getClassName(string $commandClass): string
     {
-        return str_replace($this->search, $this->replace, $commandClassName);
+        return \str_replace($this->search, $this->replace, $commandClass);
     }
 }

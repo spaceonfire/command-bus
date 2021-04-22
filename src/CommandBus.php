@@ -4,64 +4,39 @@ declare(strict_types=1);
 
 namespace spaceonfire\CommandBus;
 
-use Closure;
-use InvalidArgumentException;
-use Psr\Container\ContainerInterface;
+use spaceonfire\CommandBus\Exception\CannotInvokeHandlerException;
 use spaceonfire\CommandBus\Mapping\CommandToHandlerMappingInterface;
-use Webmozart\Assert\Assert;
-use function array_pop;
-use function get_class;
-use function is_callable;
+use spaceonfire\Container\FactoryAggregateInterface;
+use spaceonfire\Container\FactoryContainer;
+use spaceonfire\Container\FactoryOptionsInterface;
 
 /**
  * Receives a command and sends it through a chain of middleware for processing.
  */
 class CommandBus
 {
-    /**
-     * @var CommandToHandlerMappingInterface
-     */
-    private $mapping;
+    private CommandToHandlerMappingInterface $mapping;
 
-    /**
-     * @var Closure
-     */
-    private $middlewareChain;
+    private FactoryAggregateInterface $factory;
 
-    /**
-     * @var ContainerInterface|null
-     */
-    private $container;
+    private \Closure $middlewareChain;
 
-    /**
-     * @var bool
-     */
-    private $isClone = false;
+    private bool $isClone = false;
 
     /**
      * CommandBus constructor.
      * @param CommandToHandlerMappingInterface $mapping
-     * @param MiddlewareInterface[] $middleware
-     * @param ContainerInterface|null $container
+     * @param array<MiddlewareInterface|class-string<MiddlewareInterface>> $middleware
+     * @param FactoryAggregateInterface|null $factory
      */
     public function __construct(
         CommandToHandlerMappingInterface $mapping,
         array $middleware = [],
-        ?ContainerInterface $container = null
+        ?FactoryAggregateInterface $factory = null
     ) {
-        foreach ($middleware as $m) {
-            if (!$m instanceof MiddlewareInterface) {
-                throw new InvalidArgumentException(sprintf(
-                    'Argument $middleware must be an array of %s. Got one %s',
-                    MiddlewareInterface::class,
-                    get_class($m)
-                ));
-            }
-        }
-
         $this->mapping = $mapping;
-        $this->container = $container;
-        $this->middlewareChain = $this->createExecutionChain($middleware);
+        $this->factory = $factory ?? new FactoryContainer();
+        $this->middlewareChain = $this->makeMiddlewareChain($middleware);
     }
 
     /**
@@ -69,8 +44,8 @@ class CommandBus
      */
     public function __clone()
     {
-        $middlewareChain = Closure::bind($this->middlewareChain, $this);
-        Assert::isCallable($middlewareChain);
+        $middlewareChain = $this->middlewareChain->bindTo($this);
+        \assert($middlewareChain instanceof \Closure);
         $this->middlewareChain = $middlewareChain;
         $this->isClone = true;
     }
@@ -86,36 +61,45 @@ class CommandBus
     }
 
     /**
-     * Creates handler object by given class name.
+     * Creates handler object by given class name using factory.
      *
-     * It uses container if one passed to command bus or simply call handler class constructor.
-     * You can patch this procedure in your own implementation of command bus.
+     * You can modify this procedure in your successor class.
      *
-     * @param string $handlerClassName
-     * @return object
+     * @template T of object
+     * @param class-string<T> $handlerClass
+     * @param FactoryOptionsInterface|array<string,mixed>|null $options
+     * @return T
      */
-    protected function createHandlerObject(string $handlerClassName): object
+    protected function makeHandlerObject(string $handlerClass, $options = null): object
     {
-        if ($this->container && $this->container->has($handlerClassName)) {
-            return $this->container->get($handlerClassName);
-        }
-
-        return new $handlerClassName();
+        return $this->factory->make($handlerClass, $options);
     }
 
     /**
-     * @param MiddlewareInterface[] $middlewareList
-     * @return Closure
+     * @param array<MiddlewareInterface|class-string<MiddlewareInterface>> $middlewareList
+     * @return \Closure
      */
-    private function createExecutionChain(array $middlewareList): Closure
+    private function makeMiddlewareChain(array $middlewareList): \Closure
     {
-        $lastCallable = function (object $command) {
-            return $this->createCommandHandler($command)($command);
-        };
+        $lastCallable = fn (object $command) => $this->makeCommandHandler($command)($command);
 
-        while ($middleware = array_pop($middlewareList)) {
+        while ($item = \array_pop($middlewareList)) {
+            try {
+                $middleware = \is_string($item) ? $this->factory->make($item) : $item;
+
+                if (!$middleware instanceof MiddlewareInterface) {
+                    throw new \InvalidArgumentException('Middleware should implement proper interface.');
+                }
+            } catch (\Throwable $e) {
+                throw new \InvalidArgumentException(
+                    \sprintf('Invalid middleware: %s.', \is_string($item) ? $item : \get_debug_type($item)),
+                    $e->getCode(),
+                    $e,
+                );
+            }
+
             $lastCallable = function ($command) use ($middleware, $lastCallable) {
-                $lastCallable = $this->isClone ? Closure::bind($lastCallable, $this) : $lastCallable;
+                $lastCallable = $this->isClone ? \Closure::bind($lastCallable, $this) : $lastCallable;
                 return $middleware->execute($command, $lastCallable);
             };
         }
@@ -127,21 +111,18 @@ class CommandBus
      * @param object $command
      * @return callable
      */
-    private function createCommandHandler(object $command): callable
+    private function makeCommandHandler(object $command): callable
     {
-        $commandClassName = get_class($command);
-        $handlerClassName = $this->mapping->getClassName($commandClassName);
-        $methodName = $this->mapping->getMethodName($commandClassName);
+        $commandClass = \get_class($command);
+        $handlerClass = $this->mapping->getClassName($commandClass);
+        $handlerMethod = $this->mapping->getMethodName($commandClass);
 
-        $handler = $this->createHandlerObject($handlerClassName);
+        $handler = [$this->makeHandlerObject($handlerClass), $handlerMethod];
 
-        if (!is_callable([$handler, $methodName])) {
-            throw CanNotInvokeHandler::forCommand(
-                $command,
-                sprintf('Method "%s" does not exist on handler', $methodName)
-            );
+        if (!\is_callable($handler)) {
+            throw CannotInvokeHandlerException::methodNotExists($command, $handlerClass, $handlerMethod);
         }
 
-        return [$handler, $methodName];
+        return $handler;
     }
 }

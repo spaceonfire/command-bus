@@ -4,58 +4,47 @@ declare(strict_types=1);
 
 namespace spaceonfire\CommandBus\Mapping\ClassName;
 
-use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
-use spaceonfire\CommandBus\_Fixtures\Command\AddTaskCommand;
+use spaceonfire\CommandBus\Fixtures\Command\AddTaskCommand;
 
 class ReplacementClassNameMappingTest extends TestCase
 {
-    /**
-     * @param $search
-     * @param $replace
-     * @dataProvider constructArgumentsProvider
-     */
-    public function testConstruct($search, $replace): void
+    public function testSimpleSearchReplace(): void
     {
-        new ReplacementClassNameMapping($search, $replace);
-        self::assertTrue(true);
+        $mapping = new ReplacementClassNameMapping('Foo', 'Bar');
+        self::assertSame('BarClass', $mapping->getClassName('FooClass'));
     }
 
-    public function constructArgumentsProvider(): array
+    public function testSearchReplaceMultiple(): void
     {
-        return [
-            ['search', 'replace'],
-            [['search1', 'search2'], 'replace'],
-            [['search' => 'replace'], null],
-        ];
+        $mapping = new ReplacementClassNameMapping(['Foo', 42], ['Bar', 24]);
+        self::assertSame('BarClass24', $mapping->getClassName('FooClass42'));
     }
 
-    /**
-     * @param $search
-     * @param $replace
-     * @dataProvider constructExceptionArgumentsProvider
-     */
-    public function testConstructException($search, $replace): void
+    public function testSearchMultipleReplaceWithOne(): void
     {
-        $this->expectException(InvalidArgumentException::class);
-        new ReplacementClassNameMapping($search, $replace);
+        $mapping = new ReplacementClassNameMapping(['Foo', 'Bar'], 'Baz');
+        self::assertSame('BazBaz', $mapping->getClassName('FooBar'));
     }
 
-    public function constructExceptionArgumentsProvider(): array
+    public function testSearchReplaceMap(): void
     {
-        return [
-            [0, 1],
-            ['search', null],
-            [['search1', 'search2'], null],
-        ];
+        $mapping = new ReplacementClassNameMapping([
+            'Foo' => 'Bar',
+        ]);
+        self::assertSame('BarClass', $mapping->getClassName('FooClass'));
     }
 
-    public function testGetClassName(): void
+    public function testRealWorldExample(): void
     {
-        $mapping = new ReplacementClassNameMapping('spaceonfire\CommandBus\_Fixtures\Command', 'spaceonfire\CommandBus\_Fixtures\Handler');
+        // Change namespace
+        $mapping = new ReplacementClassNameMapping(
+            'spaceonfire\CommandBus\Fixtures\Command',
+            'spaceonfire\CommandBus\Fixtures\Handler',
+        );
 
-        self::assertEquals(
-            'spaceonfire\CommandBus\_Fixtures\Handler\AddTaskCommand',
+        self::assertSame(
+            'spaceonfire\CommandBus\Fixtures\Handler\AddTaskCommand',
             $mapping->getClassName(AddTaskCommand::class)
         );
     }

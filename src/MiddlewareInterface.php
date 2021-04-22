@@ -18,7 +18,7 @@ interface MiddlewareInterface
 {
     /**
      * @param object $command
-     * @param callable $next
+     * @param callable(object):mixed $next
      * @return mixed
      */
     public function execute(object $command, callable $next);

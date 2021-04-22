@@ -8,8 +8,8 @@ interface ClassNameMappingInterface
 {
     /**
      * Returns handler class name for given command class name
-     * @param string $commandClassName
-     * @return string
+     * @param class-string $commandClass
+     * @return class-string
      */
-    public function getClassName(string $commandClassName): string;
+    public function getClassName(string $commandClass): string;
 }

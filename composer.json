@@ -1,7 +1,7 @@
 {
   "name": "spaceonfire/command-bus",
-  "type": "library",
   "description": "Simple and extendable command bus",
+  "type": "library",
   "keywords": [
     "command-bus",
     "query-bus",
@@ -20,17 +20,19 @@
     }
   ],
   "require": {
-    "php": "^7.2|^8.0",
-    "psr/container": "^1.0",
-    "webmozart/assert": "^1.6"
+    "php": "^7.4|^8.0",
+    "spaceonfire/container": "^3.0",
+    "spaceonfire/exception": "^3.0",
+    "yiisoft/friendly-exception": "^1.0"
   },
   "require-dev": {
+    "phpunit/phpunit": "^9.5",
     "psr/log": "^1.1",
     "roave/security-advisories": "dev-latest",
-    "symfony/stopwatch": "^5.1"
+    "symfony/stopwatch": "^5.2"
   },
   "suggest": {
-    "psr/log": "Required for LoggerMiddleware and ProfilerMiddleware",
+    "psr/log-implementation": "Required for LoggerMiddleware and ProfilerMiddleware",
     "symfony/stopwatch": "Required for ProfilerMiddleware"
   },
   "autoload": {
@@ -41,11 +43,6 @@
   "autoload-dev": {
     "psr-4": {
       "spaceonfire\\CommandBus\\": "tests"
-    }
-  },
-  "extra": {
-    "branch-alias": {
-      "dev-master": "2.5-dev"
     }
   },
   "config": {

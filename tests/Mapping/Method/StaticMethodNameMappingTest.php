@@ -10,6 +10,6 @@ class StaticMethodNameMappingTest extends TestCase
 {
     public function testGetMethodName(): void
     {
-        self::assertEquals('__invoke', (new StaticMethodNameMapping('__invoke'))->getMethodName('command'));
+        self::assertSame('__invoke', (new StaticMethodNameMapping('__invoke'))->getMethodName('command'));
     }
 }

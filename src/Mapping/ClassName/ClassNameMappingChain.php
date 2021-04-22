@@ -4,37 +4,24 @@ declare(strict_types=1);
 
 namespace spaceonfire\CommandBus\Mapping\ClassName;
 
-use Webmozart\Assert\Assert;
-
-class ClassNameMappingChain implements ClassNameMappingInterface
+final class ClassNameMappingChain implements ClassNameMappingInterface
 {
     /**
      * @var ClassNameMappingInterface[]
      */
-    private $mappings;
+    private array $mappings;
 
-    /**
-     * ClassNameMappingChain constructor.
-     * @param ClassNameMappingInterface[] $mappings
-     */
-    public function __construct(array $mappings)
+    public function __construct(ClassNameMappingInterface ...$mappings)
     {
-        Assert::notEmpty($mappings);
-        Assert::allIsInstanceOf($mappings, ClassNameMappingInterface::class);
         $this->mappings = $mappings;
     }
 
-    /**
-     * @inheritDoc
-     */
-    public function getClassName(string $commandClassName): string
+    public function getClassName(string $commandClass): string
     {
-        $result = $commandClassName;
-
-        foreach ($this->mappings as $mapping) {
-            $result = $mapping->getClassName($result);
-        }
-
-        return $result;
+        return \array_reduce(
+            $this->mappings,
+            static fn (string $carry, ClassNameMappingInterface $mapping) => $mapping->getClassName($carry),
+            $commandClass,
+        );
     }
 }
